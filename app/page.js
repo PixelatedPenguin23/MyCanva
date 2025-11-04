@@ -1,65 +1,221 @@
-import Image from "next/image";
+'use client';
+import React, { useEffect, useRef, useState } from 'react';
+import { Stage, Layer, Rect, Circle, Line, Arrow, Transformer } from 'react-konva';
+import { Button, Space } from 'antd';
+import { BgColorsOutlined, HighlightOutlined } from '@ant-design/icons';
+import { gsap } from 'gsap';
 
-export default function Home() {
+const TOOL_TYPES = {
+  SELECT: 'select',
+  RECT: 'rect',
+  CIRCLE: 'circle',
+  LINE: 'line',
+  ARROW: 'arrow',
+  DRAW: 'draw',
+};
+
+export default function CanvasAppV2() {
+  const stageRef = useRef(null);
+  const menuRef = useRef(null);
+  const trRef = useRef(null);
+
+  const [dim, setDim] = useState({ w: 0, h: 0 });
+  const [tool, setTool] = useState(TOOL_TYPES.SELECT);
+  const [shapes, setShapes] = useState([]);
+  const [currentShapeId, setCurrentShapeId] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [color, setColor] = useState('#ff0000');
+  const [bgColor, setBgColor] = useState('#ffffff');
+
+  const [menuPos, setMenuPos] = useState({ x: 20, y: 20 });
+  const [draggingMenu, setDraggingMenu] = useState(false);
+  const [menuOffset, setMenuOffset] = useState({ x: 0, y: 0 });
+
+  // Canvas full screen
+  useEffect(() => {
+    const handleResize = () => setDim({ w: window.innerWidth, h: window.innerHeight });
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Menu opacity animation
+  useEffect(() => {
+    if (!menuRef.current) return;
+    gsap.set(menuRef.current, { opacity: 0.7 });
+  }, []);
+
+  // Transformer attach
+  useEffect(() => {
+    if (trRef.current && selectedId) {
+      const stage = stageRef.current;
+      const selectedNode = stage.findOne(`#${selectedId}`);
+      if (selectedNode) trRef.current.nodes([selectedNode]);
+      else trRef.current.nodes([]);
+      trRef.current.getLayer().batchDraw();
+    } else if (trRef.current) {
+      trRef.current.nodes([]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId, shapes]);
+
+  // Drawing logic
+  const handleMouseDown = (e) => {
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+
+    if (tool === TOOL_TYPES.SELECT) {
+      const clickedOnEmpty = e.target === stage;
+      if (clickedOnEmpty) setSelectedId(null);
+      return;
+    }
+
+    const shape = {
+      id: Date.now().toString(),
+      type: tool,
+      points: [pos.x, pos.y],
+      x: pos.x,
+      y: pos.y,
+      width: 0,
+      height: 0,
+      color,
+    };
+    setShapes([...shapes, shape]);
+    setCurrentShapeId(shape.id);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!currentShapeId) return;
+    const pos = e.target.getStage().getPointerPosition();
+    setShapes((prev) =>
+      prev.map((s) => {
+        if (s.id !== currentShapeId) return s;
+        const dx = pos.x - s.x;
+        const dy = pos.y - s.y;
+        if (s.type === TOOL_TYPES.RECT || s.type === TOOL_TYPES.CIRCLE)
+          return { ...s, width: dx, height: dy };
+        else if (s.type === TOOL_TYPES.LINE || s.type === TOOL_TYPES.DRAW)
+          return { ...s, points: [...s.points, pos.x, pos.y] };
+        else if (s.type === TOOL_TYPES.ARROW)
+          return { ...s, points: [s.x, s.y, pos.x, pos.y] };
+        return s;
+      })
+    );
+  };
+
+  const handleMouseUp = () => setCurrentShapeId(null);
+
+  const handleShapeClick = (id) => {
+    setTool(TOOL_TYPES.SELECT);
+    setSelectedId(id);
+  };
+
+  // Draggable menu logic
+  const handleMenuMouseDown = (e) => {
+    setDraggingMenu(true);
+    setMenuOffset({ x: e.clientX - menuPos.x, y: e.clientY - menuPos.y });
+  };
+
+  const handleMenuMouseMove = (e) => {
+    if (!draggingMenu) return;
+    setMenuPos({ x: e.clientX - menuOffset.x, y: e.clientY - menuOffset.y });
+  };
+
+  const handleMenuMouseUp = () => setDraggingMenu(false);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div
+      style={{ width: '100vw', height: '100vh' }}
+      onMouseMove={handleMenuMouseMove}
+      onMouseUp={handleMenuMouseUp}
+    >
+      {/* Draggable Menu */}
+      <div
+        ref={menuRef}
+        style={{
+          position: 'absolute',
+          top: menuPos.y,
+          left: menuPos.x,
+          zIndex: 100,
+          padding: 12,
+          borderRadius: 10,
+          background: 'rgba(255,255,255,0.8)',
+          cursor: 'move',
+        }}
+        onMouseDown={handleMenuMouseDown}
+        onMouseEnter={(e) => gsap.to(e.currentTarget, { opacity: 1, duration: 0.3 })}
+        onMouseLeave={(e) => gsap.to(e.currentTarget, { opacity: 0.8, duration: 0.3 })}
+      >
+        <Space direction="vertical">
+          <Space wrap>
+            <Button onClick={() => setTool(TOOL_TYPES.SELECT)}>Select</Button>
+            <Button onClick={() => setTool(TOOL_TYPES.RECT)}>Rectangle</Button>
+            <Button onClick={() => setTool(TOOL_TYPES.CIRCLE)}>Circle</Button>
+            <Button onClick={() => setTool(TOOL_TYPES.LINE)}>Line</Button>
+            <Button onClick={() => setTool(TOOL_TYPES.ARROW)}>Arrow</Button>
+            <Button onClick={() => setTool(TOOL_TYPES.DRAW)}>Draw</Button>
+          </Space>
+          <Space wrap>
+            <Button
+              icon={<HighlightOutlined />}
+              onClick={() => {
+                const newColor = prompt('Enter shape color (hex)') || '#ff0000';
+                setColor(newColor);
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Shape Color
+            </Button>
+            <Button
+              icon={<BgColorsOutlined />}
+              onClick={() => {
+                const newColor = prompt('Enter background color (hex)') || '#ffffff';
+                setBgColor(newColor);
+              }}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+              Background
+            </Button>
+          </Space>
+        </Space>
+      </div>
+
+      {/* Canvas */}
+      <Stage
+        width={dim.w}
+        height={dim.h}
+        ref={stageRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+      >
+        <Layer>
+          <Rect x={0} y={0} width={dim.w} height={dim.h} fill={bgColor} />
+          {shapes.map((s) => {
+            const commonProps = {
+              key: s.id,
+              id: s.id,
+              draggable: true,
+              onClick: () => handleShapeClick(s.id),
+            };
+            if (s.type === TOOL_TYPES.RECT) return <Rect {...commonProps} x={s.x} y={s.y} width={s.width} height={s.height} fill={s.color} />;
+            if (s.type === TOOL_TYPES.CIRCLE)
+              return (
+                <Circle
+                  {...commonProps}
+                  x={s.x + s.width / 2}
+                  y={s.y + s.height / 2}
+                  radius={Math.sqrt((s.width ** 2 + s.height ** 2) / 2)}
+                  fill={s.color}
+                />
+              );
+            if (s.type === TOOL_TYPES.LINE || s.type === TOOL_TYPES.DRAW)
+              return <Line {...commonProps} points={s.points} stroke={s.color} strokeWidth={2} lineCap="round" lineJoin="round" tension={0.5} />;
+            if (s.type === TOOL_TYPES.ARROW)
+              return <Arrow {...commonProps} points={s.points} stroke={s.color} strokeWidth={3} pointerLength={10} pointerWidth={10} />;
+            return null;
+          })}
+          <Transformer ref={trRef} />
+        </Layer>
+      </Stage>
     </div>
   );
 }
