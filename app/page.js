@@ -1,221 +1,94 @@
-'use client';
-import React, { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Line, Arrow, Transformer } from 'react-konva';
-import { Button, Space } from 'antd';
-import { BgColorsOutlined, HighlightOutlined } from '@ant-design/icons';
-import { gsap } from 'gsap';
+'use client'
 
-const TOOL_TYPES = {
-  SELECT: 'select',
-  RECT: 'rect',
-  CIRCLE: 'circle',
-  LINE: 'line',
-  ARROW: 'arrow',
-  DRAW: 'draw',
-};
+import React, { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Button, Modal, Tabs, Form, Input } from 'antd'
+import gsap from 'gsap'
 
-export default function CanvasAppV2() {
-  const stageRef = useRef(null);
-  const menuRef = useRef(null);
-  const trRef = useRef(null);
+const Page = () => {
+  const introRef = useRef(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('signIn')
 
-  const [dim, setDim] = useState({ w: 0, h: 0 });
-  const [tool, setTool] = useState(TOOL_TYPES.SELECT);
-  const [shapes, setShapes] = useState([]);
-  const [currentShapeId, setCurrentShapeId] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [color, setColor] = useState('#ff0000');
-  const [bgColor, setBgColor] = useState('#ffffff');
-
-  const [menuPos, setMenuPos] = useState({ x: 20, y: 20 });
-  const [draggingMenu, setDraggingMenu] = useState(false);
-  const [menuOffset, setMenuOffset] = useState({ x: 0, y: 0 });
-
-  // Canvas full screen
   useEffect(() => {
-    const handleResize = () => setDim({ w: window.innerWidth, h: window.innerHeight });
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    const tl = gsap.timeline()
 
-  // Menu opacity animation
-  useEffect(() => {
-    if (!menuRef.current) return;
-    gsap.set(menuRef.current, { opacity: 0.7 });
-  }, []);
+    // Intro animation: dark to white, blur and scale
+    tl.fromTo(
+      introRef.current,
+      { backgroundColor: '#111', filter: 'blur(20px)', scale: 1.2 },
+      { backgroundColor: '#fff', filter: 'blur(0px)', scale: 1, duration: 2, ease: 'power2.out' }
+    )
+  }, [])
 
-  // Transformer attach
-  useEffect(() => {
-    if (trRef.current && selectedId) {
-      const stage = stageRef.current;
-      const selectedNode = stage.findOne(`#${selectedId}`);
-      if (selectedNode) trRef.current.nodes([selectedNode]);
-      else trRef.current.nodes([]);
-      trRef.current.getLayer().batchDraw();
-    } else if (trRef.current) {
-      trRef.current.nodes([]);
-      trRef.current.getLayer().batchDraw();
-    }
-  }, [selectedId, shapes]);
-
-  // Drawing logic
-  const handleMouseDown = (e) => {
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-
-    if (tool === TOOL_TYPES.SELECT) {
-      const clickedOnEmpty = e.target === stage;
-      if (clickedOnEmpty) setSelectedId(null);
-      return;
-    }
-
-    const shape = {
-      id: Date.now().toString(),
-      type: tool,
-      points: [pos.x, pos.y],
-      x: pos.x,
-      y: pos.y,
-      width: 0,
-      height: 0,
-      color,
-    };
-    setShapes([...shapes, shape]);
-    setCurrentShapeId(shape.id);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!currentShapeId) return;
-    const pos = e.target.getStage().getPointerPosition();
-    setShapes((prev) =>
-      prev.map((s) => {
-        if (s.id !== currentShapeId) return s;
-        const dx = pos.x - s.x;
-        const dy = pos.y - s.y;
-        if (s.type === TOOL_TYPES.RECT || s.type === TOOL_TYPES.CIRCLE)
-          return { ...s, width: dx, height: dy };
-        else if (s.type === TOOL_TYPES.LINE || s.type === TOOL_TYPES.DRAW)
-          return { ...s, points: [...s.points, pos.x, pos.y] };
-        else if (s.type === TOOL_TYPES.ARROW)
-          return { ...s, points: [s.x, s.y, pos.x, pos.y] };
-        return s;
-      })
-    );
-  };
-
-  const handleMouseUp = () => setCurrentShapeId(null);
-
-  const handleShapeClick = (id) => {
-    setTool(TOOL_TYPES.SELECT);
-    setSelectedId(id);
-  };
-
-  // Draggable menu logic
-  const handleMenuMouseDown = (e) => {
-    setDraggingMenu(true);
-    setMenuOffset({ x: e.clientX - menuPos.x, y: e.clientY - menuPos.y });
-  };
-
-  const handleMenuMouseMove = (e) => {
-    if (!draggingMenu) return;
-    setMenuPos({ x: e.clientX - menuOffset.x, y: e.clientY - menuOffset.y });
-  };
-
-  const handleMenuMouseUp = () => setDraggingMenu(false);
+  const handleModalOpen = () => setIsModalOpen(true)
+  const handleModalClose = () => setIsModalOpen(false)
 
   return (
-    <div
-      style={{ width: '100vw', height: '100vh' }}
-      onMouseMove={handleMenuMouseMove}
-      onMouseUp={handleMenuMouseUp}
-    >
-      {/* Draggable Menu */}
-      <div
-        ref={menuRef}
-        style={{
-          position: 'absolute',
-          top: menuPos.y,
-          left: menuPos.x,
-          zIndex: 100,
-          padding: 12,
-          borderRadius: 10,
-          background: 'rgba(255,255,255,0.8)',
-          cursor: 'move',
-        }}
-        onMouseDown={handleMenuMouseDown}
-        onMouseEnter={(e) => gsap.to(e.currentTarget, { opacity: 1, duration: 0.3 })}
-        onMouseLeave={(e) => gsap.to(e.currentTarget, { opacity: 0.8, duration: 0.3 })}
-      >
-        <Space direction="vertical">
-          <Space wrap>
-            <Button onClick={() => setTool(TOOL_TYPES.SELECT)}>Select</Button>
-            <Button onClick={() => setTool(TOOL_TYPES.RECT)}>Rectangle</Button>
-            <Button onClick={() => setTool(TOOL_TYPES.CIRCLE)}>Circle</Button>
-            <Button onClick={() => setTool(TOOL_TYPES.LINE)}>Line</Button>
-            <Button onClick={() => setTool(TOOL_TYPES.ARROW)}>Arrow</Button>
-            <Button onClick={() => setTool(TOOL_TYPES.DRAW)}>Draw</Button>
-          </Space>
-          <Space wrap>
-            <Button
-              icon={<HighlightOutlined />}
-              onClick={() => {
-                const newColor = prompt('Enter shape color (hex)') || '#ff0000';
-                setColor(newColor);
-              }}
-            >
-              Shape Color
-            </Button>
-            <Button
-              icon={<BgColorsOutlined />}
-              onClick={() => {
-                const newColor = prompt('Enter background color (hex)') || '#ffffff';
-                setBgColor(newColor);
-              }}
-            >
-              Background
-            </Button>
-          </Space>
-        </Space>
+    <div ref={introRef} className="h-screen w-screen flex flex-col justify-center items-center transition-colors">
+      <h1 className="text-4xl md:text-6xl font-bold mb-8">Welcome to Our App</h1>
+      <div className="flex space-x-4">
+        <Link href="/canvas">
+          <Button type="primary" size="large">Go to Canvas</Button>
+        </Link>
+        <Button type="default" size="large" onClick={handleModalOpen}>Sign In / Sign Up</Button>
       </div>
 
-      {/* Canvas */}
-      <Stage
-        width={dim.w}
-        height={dim.h}
-        ref={stageRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+      {/* Ant Design Modal */}
+      <Modal
+        open={isModalOpen}
+        onCancel={handleModalClose}
+        footer={null}
+        centered
+        width={400}
       >
-        <Layer>
-          <Rect x={0} y={0} width={dim.w} height={dim.h} fill={bgColor} />
-          {shapes.map((s) => {
-            const commonProps = {
-              key: s.id,
-              id: s.id,
-              draggable: true,
-              onClick: () => handleShapeClick(s.id),
-            };
-            if (s.type === TOOL_TYPES.RECT) return <Rect {...commonProps} x={s.x} y={s.y} width={s.width} height={s.height} fill={s.color} />;
-            if (s.type === TOOL_TYPES.CIRCLE)
-              return (
-                <Circle
-                  {...commonProps}
-                  x={s.x + s.width / 2}
-                  y={s.y + s.height / 2}
-                  radius={Math.sqrt((s.width ** 2 + s.height ** 2) / 2)}
-                  fill={s.color}
-                />
-              );
-            if (s.type === TOOL_TYPES.LINE || s.type === TOOL_TYPES.DRAW)
-              return <Line {...commonProps} points={s.points} stroke={s.color} strokeWidth={2} lineCap="round" lineJoin="round" tension={0.5} />;
-            if (s.type === TOOL_TYPES.ARROW)
-              return <Arrow {...commonProps} points={s.points} stroke={s.color} strokeWidth={3} pointerLength={10} pointerWidth={10} />;
-            return null;
-          })}
-          <Transformer ref={trRef} />
-        </Layer>
-      </Stage>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          centered
+          items={[
+            {
+              key: 'signIn',
+              label: 'Sign In',
+              children: (
+                <Form layout="vertical" className="space-y-4">
+                  <Form.Item label="Email" name="email">
+                    <Input type="email" placeholder="Enter email" />
+                  </Form.Item>
+                  <Form.Item label="Password" name="password">
+                    <Input.Password placeholder="Enter password" />
+                  </Form.Item>
+                  <Form.Item>
+                    <Button type="primary" block>Sign In</Button>
+                  </Form.Item>
+                </Form>
+              ),
+            },
+            {
+              key: 'signUp',
+              label: 'Sign Up',
+              children: (
+                <Form layout="vertical" className="space-y-4">
+                  <Form.Item label="Name" name="name">
+                    <Input placeholder="Enter name" />
+                  </Form.Item>
+                  <Form.Item label="Email" name="email">
+                    <Input type="email" placeholder="Enter email" />
+                  </Form.Item>
+                  <Form.Item label="Password" name="password">
+                    <Input.Password placeholder="Enter password" />
+                  </Form.Item>
+                  <Form.Item>
+                    <Button type="primary" block>Sign Up</Button>
+                  </Form.Item>
+                </Form>
+              ),
+            },
+          ]}
+        />
+      </Modal>
     </div>
-  );
+  )
 }
+
+export default Page
